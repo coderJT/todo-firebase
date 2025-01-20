@@ -2,6 +2,8 @@
 
 A real-time Todo application built with React, Vite, and Firebase. Features user authentication and real-time data synchronization.
 
+<img width="1080" alt="Screenshot 2025-01-20 at 11 41 56 AM" src="https://github.com/user-attachments/assets/1d2230d5-bc99-4f5e-90f5-d86c9582c327" />
+
 ## Features
 
 - 🔐 User Authentication (Sign up/Sign in)
