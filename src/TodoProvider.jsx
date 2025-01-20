@@ -1,5 +1,5 @@
 import { TodoContext } from "./TodoContext";
-import { useReducer, useEffect } from "react";
+import { useReducer, useEffect, useRef, useState } from "react";
 import { 
   collection, 
   doc, 
@@ -8,10 +8,11 @@ import {
   updateDoc, 
   deleteDoc, 
   query, 
-  orderBy 
-} from "firebase/firestore";
+  orderBy,
+} from "firebase/firestore"; 
 import { db } from "./firebase";
 import PropTypes from 'prop-types';
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 const initialState = {
   todos: [], 
@@ -56,11 +57,24 @@ const todoReducer = (state, action) => {
 
 const TodoProvider = ({ children }) => {
   const [state, dispatch] = useReducer(todoReducer, initialState);
-  const todosRef = collection(db, "todos");
+  const userDocRef = useRef(null);
+  const userTodosRef = useRef(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const auth = getAuth();
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+        setIsLoggedIn(user);
+    } 
+  })
 
   useEffect(() => {
-    const q = query(todosRef, orderBy("createdAt", "desc"));
-    
+    if (!auth.currentUser) return; 
+
+    userDocRef.current = doc(db, "todos", auth.currentUser.uid);
+    userTodosRef.current = collection(userDocRef.current, "items");
+
+    const q = query(userTodosRef.current, orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const todos = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -72,10 +86,12 @@ const TodoProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isLoggedIn]);
 
   const addTodo = async (todo) => {
     try {
+      if (!auth.currentUser) throw new Error("Must be logged in");
+
       const todoData = {
         name: todo.name,
         description: todo.description,
@@ -83,7 +99,7 @@ const TodoProvider = ({ children }) => {
         createdAt: new Date().toISOString()
       };
       
-      await addDoc(todosRef, todoData);
+      await addDoc(userTodosRef.current, todoData);
     } catch (error) {
       console.error("Error adding todo:", error);
       throw error;
@@ -92,7 +108,7 @@ const TodoProvider = ({ children }) => {
 
   const editTodo = async (todo) => {
     try {
-      const todoDoc = doc(todosRef, todo.id);
+      const todoDoc = doc(userTodosRef.current, todo.id);
       await updateDoc(todoDoc, {
         name: todo.name,
         description: todo.description,
@@ -106,7 +122,7 @@ const TodoProvider = ({ children }) => {
 
   const deleteTodo = async (id) => {
     try {
-      const todoDoc = doc(todosRef, id);
+      const todoDoc = doc(userTodosRef.current, id);
       await deleteDoc(todoDoc);
     } catch (error) {
       console.error("Error deleting todo:", error);
@@ -116,7 +132,7 @@ const TodoProvider = ({ children }) => {
 
   const toggleTodo = async (id) => {
     try {
-      const todoDoc = doc(todosRef, id);
+      const todoDoc = doc(userTodosRef.current, id);
       const todo = state.todos.find(t => t.id === id);
       await updateDoc(todoDoc, {
         completed: !todo.completed,
